@@ -146,7 +146,7 @@ def rename_if_reserved_by_dot(word):
     return word
 
 
-def dot_preamble(c_fname, for_latex, rankdir):
+def dot_preamble(c_fname, for_latex, rankdir, ratio, size):
     c_fname = _graph_name_for_latex(c_fname, for_latex)
     d = _graph_node_defaults()
     node_defaults = ', '.join(
@@ -155,11 +155,13 @@ def dot_preamble(c_fname, for_latex, rankdir):
         'digraph G {{\n'
         'node [{node_defaults}];\n'
         'rankdir={rankdir};\n'
-        'label="{c_fname}"\n'
+        'label="{c_fname}";\n'
+        'ratio="{ratio}";\n'
+        'size="{size}";\n'
         ).format(
             node_defaults=node_defaults,
             rankdir=rankdir,
-            c_fname=c_fname)
+            c_fname=c_fname, ratio=ratio, size=size)
     return dot_str
 
 
@@ -270,8 +272,8 @@ def node_defined_in_other_src(node, other_graphs):
 
 def dump_dot_wo_pydot(
         graph, other_graphs, c_fname,
-        for_latex, multi_page, rankdir):
-    dot_str = dot_preamble(c_fname, for_latex, rankdir)
+        for_latex, multi_page, rankdir, ratio, size):
+    dot_str = dot_preamble(c_fname, for_latex, rankdir, ratio, size)
     # format nodes
     for node in graph:
         node_dict = graph.nodes[node]
@@ -337,7 +339,7 @@ def _annotate_graph(
 
 
 def write_graph2dot(graph, other_graphs, c_fname, img_fname,
-                    for_latex, multi_page, layout, rankdir):
+                    for_latex, multi_page, layout, rankdir, ratio, size, fontsize):
     if pydot is None:
         print('Pydot not found. Exporting using native exporter.')
         dot_str = dump_dot_wo_pydot(
@@ -349,7 +351,7 @@ def write_graph2dot(graph, other_graphs, c_fname, img_fname,
         # dump using networkx and pydot
         g = _annotate_graph(
             graph, other_graphs, c_fname, for_latex, multi_page)
-        dot_path = _dump_graph_to_dot(g, img_fname, layout, rankdir)
+        dot_path = _dump_graph_to_dot(g, img_fname, layout, rankdir, ratio, size, fontsize)
     return dot_path
 
 
@@ -365,7 +367,7 @@ def _set_pydot_layout(pydot_graph, layout, rankdir):
 
 def write_graphs2dot(
         graphs, c_fnames, img_fname,
-        for_latex, multi_page, layout, rankdir):
+        for_latex, multi_page, layout, rankdir, ratio, size, fontsize):
     dot_paths = list()
     for counter, (graph, c_fname) in enumerate(zip(graphs, c_fnames)):
         other_graphs = list(graphs)
@@ -373,7 +375,7 @@ def write_graphs2dot(
         cur_img_fname = img_fname + str(counter)
         dot_path = write_graph2dot(
             graph, other_graphs, c_fname, cur_img_fname,
-            for_latex, multi_page, layout, rankdir)
+            for_latex, multi_page, layout, rankdir, ratio, size, fontsize)
         dot_paths.append(dot_path)
     return dot_paths
 
@@ -484,10 +486,13 @@ def _format_merged_node(u, d, g, for_latex, shape, colormap):
     g.add_node(u, **attr)
 
 
-def _dump_graph_to_dot(graph, img_fname, layout, rankdir):
+def _dump_graph_to_dot(graph, img_fname, layout, rankdir, ratio, size, fontsize):
     """Dump `graph` to `dot` file with base `img_fname`."""
     pydot_graph = nx.drawing.nx_pydot.to_pydot(graph)
     _set_pydot_layout(pydot_graph, layout, rankdir)
+    pydot_graph.set_ratio(ratio)
+    pydot_graph.set_fontsize(fontsize)
+    pydot_graph.set_size(f'"{size}"')
     dot_path = img_fname + '.dot'
     pydot_graph.write(dot_path, format='dot')
     return dot_path
@@ -607,6 +612,15 @@ def parse_args():
         '--version', action='version',
         version='cflow2dot version {version}'.format(
             version=_VERSION))
+    parser.add_argument(
+        '--ratio', default='',
+        help='Sets the aspect ratio (drawing height/drawing width) for the drawing')
+    parser.add_argument(
+        '--size', default='',
+        help='Maximum width and height of drawing, in inches')
+    parser.add_argument(
+        '--fontsize', default='14.0',
+        help='Font size, in points, used for text.')
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
@@ -644,6 +658,9 @@ def main():
     layout = args.layout
     rankdir = args.rankdir
     exclude_list_fname = args.exclude
+    ratio = args.ratio
+    size = args.size
+    fontsize = args.fontsize
     # configure the logger
     logger.addHandler(logging.StreamHandler())
     logger.setLevel(args.verbosity)
@@ -682,7 +699,7 @@ def main():
     else:
         dot_paths = write_graphs2dot(
             graphs, c_fnames, img_fname, for_latex,
-            multi_page, layout, rankdir)
+            multi_page, layout, rankdir, ratio, size, fontsize)
     dot2img(dot_paths, img_format, layout)
 
 
